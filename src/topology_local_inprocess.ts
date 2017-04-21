@@ -42,7 +42,7 @@ export class TopologySpoutInproc {
     private emitCallback: intf.BoltEmitCallback;
 
     /** Constructor needs to receive all data */
-    constructor(config, context: any) {
+    constructor(config: any, context: any) {
         this.name = config.name;
         this.context = context;
         this.working_dir = config.working_dir;
@@ -76,8 +76,8 @@ export class TopologySpoutInproc {
             this.isError = true;
         }
 
-        self.emitCallback = (data, stream_id, callback) => {
-            config.onEmit(data, stream_id, callback);
+        self.emitCallback = async (data, stream_id) => {
+            return await config.onEmit(data, stream_id);
         };
         self.isPaused = true;
         self.nextTs = Date.now();
@@ -94,78 +94,70 @@ export class TopologySpoutInproc {
     }
 
     /** Handler for heartbeat signal */
-    heartbeat() {
+    async heartbeat() {
         let self = this;
         self.child.heartbeat();
 
         // emit telemetry
-        self.emitCallback(self.telemetry.get(), "$telemetry", () => { });
+        await self.emitCallback(self.telemetry.get(), "$telemetry");
         self.telemetry.reset();
-        self.emitCallback(self.telemetry_total.get(), "$telemetry-total", () => { });
+        await self.emitCallback(self.telemetry_total.get(), "$telemetry-total");
     }
 
     /** Shuts down the process */
-    shutdown(callback: intf.SimpleCallback) {
-        this.child.shutdown(callback);
+    async shutdown(): Promise<void> {
+        await this.child.shutdown();
     }
 
     /** Initializes child object. */
-    init(callback: intf.SimpleCallback) {
-        this.child.init(this.name, this.init_params, callback);
+    async init(): Promise<void> {
+        await this.child.init(this.name, this.init_params);
+    }
+
+    private delay(t): Promise<void> {
+        return new Promise<void>((resolve) => {
+            setTimeout(resolve, t);
+        });
     }
 
     /** Sends run signal and starts the "pump"" */
-    run() {
+    async run() {
         let self = this;
         this.isPaused = false;
         this.child.run();
-        async.whilst(
-            () => { return !self.isPaused; },
-            (xcallback) => {
-                if (Date.now() < this.nextTs) {
-                    let sleep = this.nextTs - Date.now();
-                    setTimeout(() => { xcallback(); }, sleep);
-                } else {
-                    self.next(xcallback);
-                }
-            },
-            (err) => {
-                if (err) {
-                    console.log(err)
-                }
-            });
+        while (!self.isPaused) {
+            if (Date.now() < this.nextTs) {
+                let sleep = this.nextTs - Date.now();
+                await self.delay(sleep);
+            } else {
+                await self.next();
+            }
+        }
     }
 
     /** Requests next data message */
-    private next(callback: intf.SimpleCallback) {
+    async next(): Promise<void> {
         let self = this;
         if (this.isPaused) {
-            callback();
+            return;
         } else {
             let ts_start = Date.now();
-            setImmediate(() => {
-                this.child.next((err, data, stream_id, xcallback) => {
-                    self.telemetryAdd(Date.now() - ts_start);
-                    if (err) {
-                        console.error(err);
-                        callback();
-                        return;
-                    }
-                    if (!data) {
-                        self.nextTs = Date.now() + 1 * 1000; // sleep for 1 sec if spout is empty
-                        callback();
-                    } else {
-                        self.emitCallback(data, stream_id, (err) => {
-                            // in case child object expects confirmation call for this tuple
-                            if (xcallback) {
-                                xcallback(err, callback);
-                            } else {
-                                callback();
-                            }
-                        });
-                    }
-                });
-            });
+            await self.delay(0);
+            let { err, data, stream_id, callback } = await self.child.next();
+            self.telemetryAdd(Date.now() - ts_start);
+            if (err) {
+                console.error(err);
+                return;
+            }
+            if (!data) {
+                self.nextTs = Date.now() + 1 * 1000; // sleep for 1 sec if spout is empty
+            } else {
+                let err = await self.emitCallback(data, stream_id);
+                // in case child object expects confirmation call for this tuple
+                if (callback) {
+                    await callback(err);
+                }
+            }
         }
     }
 
@@ -280,21 +272,21 @@ export class TopologyBoltInproc {
     }
 
     /** Handler for heartbeat signal */
-    heartbeat() {
+    async heartbeat() {
         let self = this;
         self.child.heartbeat();
 
         // emit telemetry
-        self.emitCallback(self.telemetry.get(), "$telemetry", () => { });
+        await self.emitCallback(self.telemetry.get(), "$telemetry");
         self.telemetry.reset();
-        self.emitCallback(self.telemetry_total.get(), "$telemetry-total", () => { });
+        await self.emitCallback(self.telemetry_total.get(), "$telemetry-total");
     }
 
     /** Shuts down the child */
-    shutdown(callback: intf.SimpleCallback) {
+    async shutdown(): Promise<void> {
         this.isShuttingDown = true;
         if (this.inSend === 0) {
-            return this.child.shutdown(callback);
+            await this.child.shutdown();
         } else {
             this.pendingShutdownCallback = callback;
         }

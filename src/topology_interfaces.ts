@@ -10,14 +10,21 @@ export interface SimpleResultCallback<T> {
 export interface InitContextCallback {
     (error?: Error, context?: any): void;
 }
+export interface BoltEmitResult {
+    data: any;
+    stream_id: string;
+}
 export interface BoltEmitCallback {
-    (data: any, stream_id: string, callback: SimpleCallback): void;
+    (data: any, stream_id: string): Promise<void>;
 }
 export interface SpoutAckCallback {
-    (error: Error, callback: SimpleCallback): void;
+    (error: Error): Promise<void>;
 }
-export interface SpoutNextCallback {
-    (err: Error, data: any, stream_id: string, callback?: SpoutAckCallback): void;
+export interface SpoutNextResult {
+    err: Error,
+    data: any;
+    stream_id: string;
+    callback?: SpoutAckCallback;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -33,19 +40,19 @@ export interface ValidationOptions {
 // Inetrface that need to be implemented by custom bolts and spouts
 
 export interface Bolt {
-    init(name: string, config: any, callback: SimpleCallback);
-    heartbeat();
-    shutdown(callback: SimpleCallback);
-    receive(data: any, stream_id: string, callback: SimpleCallback);
+    init(name: string, config: any): Promise<void>;
+    heartbeat(): void;
+    shutdown(): Promise<void>;
+    receive(data: any, stream_id: string): Promise<void>;
 }
 
 export interface Spout {
-    init(name: string, config: any, callback: SimpleCallback);
-    heartbeat();
-    shutdown(callback: SimpleCallback);
-    run();
-    pause();
-    next(callback: SpoutNextCallback);
+    init(name: string, config: any): Promise<void>;
+    heartbeat(): void;
+    shutdown(): Promise<void>;
+    run(): void;
+    pause(): void;
+    next(): Promise<SpoutNextResult>;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -104,16 +111,16 @@ export interface StorageResultMessage {
     content: any;
 }
 export interface CoordinationStorage {
-    getLeadershipStatus(callback: SimpleResultCallback<LeadershipResultStatus>);
-    getWorkerStatus(callback: SimpleResultCallback<LeadershipResultWorkerStatus[]>);
-    getTopologyStatus(callback: SimpleResultCallback<LeadershipResultTopologyStatus[]>);
-    getTopologiesForWorker(worker: string, callback: SimpleResultCallback<LeadershipResultTopologyStatus[]>);
-    getMessages(name: string, callback: SimpleResultCallback<StorageResultMessage[]>);
+    getLeadershipStatus(): Promise<LeadershipResultStatus>;
+    getWorkerStatus(): Promise<LeadershipResultWorkerStatus[]>;
+    getTopologyStatus(): Promise<LeadershipResultTopologyStatus[]>;
+    getTopologiesForWorker(worker: string): Promise<LeadershipResultTopologyStatus[]>;
+    getMessages(name: string): Promise<StorageResultMessage[]>;
 
-    registerWorker(name: string, callback: SimpleCallback);
-    announceLeaderCandidacy(name: string, callback: SimpleCallback);
-    checkLeaderCandidacy(name: string, callback: SimpleResultCallback<boolean>);
-    assignTopology(uuid: string, worker: string, callback: SimpleCallback);
-    setTopologyStatus(uuid: string, status: string, error: string, callback: SimpleCallback);
-    setWorkerStatus(worker: string, status: string, callback: SimpleCallback);
+    registerWorker(name: string): Promise<void>;
+    announceLeaderCandidacy(name: string): Promise<void>;
+    checkLeaderCandidacy(name: string): Promise<boolean>;
+    assignTopology(uuid: string, worker: string): Promise<void>;
+    setTopologyStatus(uuid: string, status: string, error: string): Promise<void>;
+    setWorkerStatus(worker: string, status: string): Promise<void>;
 }
