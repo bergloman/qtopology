@@ -17,6 +17,7 @@ import * as ts from "./std_nodes/timer_spout";
 import * as gs from "./std_nodes/get_spout";
 import * as tss from "./std_nodes/test_spout";
 
+import * as utils from "./util/helpers";
 import * as tel from "./util/telemetry";
 
 /** Wrapper for "spout" in-process */
@@ -114,11 +115,6 @@ export class TopologySpoutInproc {
         await this.child.init(this.name, this.init_params);
     }
 
-    private delay(t): Promise<void> {
-        return new Promise<void>((resolve) => {
-            setTimeout(resolve, t);
-        });
-    }
 
     /** Sends run signal and starts the "pump"" */
     async run() {
@@ -128,7 +124,7 @@ export class TopologySpoutInproc {
         while (!self.isPaused) {
             if (Date.now() < this.nextTs) {
                 let sleep = this.nextTs - Date.now();
-                await self.delay(sleep);
+                await utils.delay(sleep);
             } else {
                 await self.next();
             }
@@ -142,7 +138,7 @@ export class TopologySpoutInproc {
             return;
         } else {
             let ts_start = Date.now();
-            await self.delay(0);
+            await utils.delay(0);
             let { err, data, stream_id, callback } = await self.child.next();
             self.telemetryAdd(Date.now() - ts_start);
             if (err) {

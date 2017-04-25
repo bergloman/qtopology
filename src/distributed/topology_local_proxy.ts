@@ -7,10 +7,10 @@ import * as intf from "../topology_interfaces";
  */
 export class TopologyLocalProxy {
 
-    private init_cb: intf.SimpleCallback;
-    private run_cb: intf.SimpleCallback;
-    private pause_cb: intf.SimpleCallback;
-    private shutdown_cb: intf.SimpleCallback;
+    private init_cb: (err?: any) => void;
+    private run_cb: (err?: any) => void;
+    private pause_cb: (err?: any) => void;
+    private shutdown_cb: (err?: any) => void;
     private was_shut_down: boolean;
     private child_exit_callback: intf.SimpleCallback;
     private child: cp.ChildProcess;
@@ -25,7 +25,7 @@ export class TopologyLocalProxy {
         this.shutdown_cb = null;
         this.was_shut_down = false;
         this.child_exit_callback = child_exit_callback || (() => { });
-        this.child = cp.fork(path.join(__dirname, "topology_local_wrapper"), [], {silent: false});
+        this.child = cp.fork(path.join(__dirname, "topology_local_wrapper"), [], { silent: false });
 
         self.child.on("message", (msgx) => {
             let msg = msgx as intf.ChildMsg;
@@ -111,39 +111,47 @@ export class TopologyLocalProxy {
     }
 
     /** Sends initialization signal to underlaying process */
-    init(config: any, callback: intf.SimpleCallback) {
-        if (this.init_cb) {
-            return callback(new Error("Pending init callback already exists."));
-        }
-        this.init_cb = callback;
-        this.send(intf.ParentMsgCode.init, config);
+    init(config: any): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            if (this.init_cb) {
+                return reject(new Error("Pending init callback already exists."));
+            }
+            this.init_cb = resolve;
+            this.send(intf.ParentMsgCode.init, config);
+        })
     }
 
     /** Sends run signal to underlaying process */
-    run(callback: intf.SimpleCallback) {
-        if (this.run_cb) {
-            return callback(new Error("Pending run callback already exists."));
-        }
-        this.run_cb = callback;
-        this.send(intf.ParentMsgCode.run, {});
+    run(): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            if (this.run_cb) {
+                return reject(new Error("Pending run callback already exists."));
+            }
+            this.run_cb = resolve;
+            this.send(intf.ParentMsgCode.run, {});
+        });
     }
 
     /** Sends pause signal to underlaying process */
-    pause(callback: intf.SimpleCallback) {
-        if (this.pause_cb) {
-            return callback(new Error("Pending pause callback already exists."));
-        }
-        this.pause_cb = callback;
-        this.send(intf.ParentMsgCode.pause, {});
+    pause(): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            if (this.pause_cb) {
+                return reject(new Error("Pending pause callback already exists."));
+            }
+            this.pause_cb = resolve;
+            this.send(intf.ParentMsgCode.pause, {});
+        });
     }
 
     /** Sends shutdown signal to underlaying process */
-    shutdown(callback: intf.SimpleCallback) {
-        if (this.shutdown_cb) {
-            return callback(new Error("Pending shutdown callback already exists."));
-        }
-        this.shutdown_cb = callback;
-        this.send(intf.ParentMsgCode.shutdown, {});
+    shutdown(): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            if (this.shutdown_cb) {
+                return reject(new Error("Pending shutdown callback already exists."));
+            }
+            this.shutdown_cb = resolve;
+            this.send(intf.ParentMsgCode.shutdown, {});
+        });
     }
 
     /** Internal method for sending messages to child process */

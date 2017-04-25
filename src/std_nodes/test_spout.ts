@@ -36,15 +36,15 @@ export class TestSpout implements intf.Spout {
         this.should_run = false;
     }
 
-    next(callback: intf.SpoutNextCallback) {
+    async next(): Promise<intf.SpoutNextResult> {
         if (!this.should_run) {
-            return callback(null, null, null);
+            return {};
         }
         if (this.tuples.length === 0) {
-            return callback(null, null, null);
+            return {};
         }
         let data = this.tuples[0];
         this.tuples = this.tuples.slice(1);
-        callback(null, data, this.stream_id);
+        return { data: data, stream_id: this.stream_id };
     }
 }

@@ -2,6 +2,7 @@ import * as async from "async";
 import * as leader from "./topology_leader";
 import * as EventEmitter from "events";
 import * as intf from "../topology_interfaces";
+import * as utils from "../util/helpers";
 
 /** This class handles communication with topology coordination storage.
  */
@@ -10,7 +11,7 @@ export class TopologyCoordinator extends EventEmitter {
     private storage: intf.CoordinationStorage;
     private name: string;
     private isRunning: boolean;
-    private shutdownCallback: intf.SimpleCallback;
+    private shutdownCallback: () => void;
     private loopTimeout: number;
     private leadership: leader.TopologyLeader;
 
@@ -31,40 +32,26 @@ export class TopologyCoordinator extends EventEmitter {
         self.isRunning = true;
         await self.storage.registerWorker(self.name);
         self.leadership.run();
-        async.whilst(
-            () => {
-                return self.isRunning;
-            },
-            (xcallback) => {
-                setTimeout(function () {
-                    self.handleIncommingRequests(xcallback);
-                }, self.loopTimeout);
-            },
-            (err) => {
-                console.log("[Coordinator] Coordinator shutdown finished.");
-                if (self.shutdownCallback) {
-                    self.shutdownCallback(err);
-                }
-            }
-        );
+        while (self.isRunning) {
+            await self.handleIncommingRequests();
+            await utils.delay(self.loopTimeout);
+        }
+        console.log("[Coordinator] Coordinator shutdown finished.");
+        if (self.shutdownCallback) {
+            self.shutdownCallback();
+        }
     }
 
     /** Shut down the loop */
-    async shutdown(callback: intf.SimpleCallback): Promise<void> {
+    async shutdown(): Promise<void> {
         let self = this;
         await self.reportWorker(self.name, "dead", "");
-        // if (err) {
-        //     console.log("Error while reporting worker status as 'dead':", err);
-        // }
         await self.leadership.shutdown();
-        // (err) => {
-        //     if (err) {
-        //         console.log("Error while shutting down leader:", err);
-        //     }
-        //     console.log("[Coordinator] Coordinator set for shutdown");
-        //     self.shutdownCallback = callback;
-        //     self.isRunning = false;
-        //});
+        console.log("[Coordinator] Coordinator set for shutdown");
+        return new Promise<void>((resolve, reject) => {
+            self.shutdownCallback = resolve;
+            self.isRunning = false;
+        });
     }
 
     /** Set status on given topology */
