@@ -12,7 +12,7 @@ export class TopologyLeader {
     private name: string;
     private isRunning: boolean;
     private isLeader: boolean;
-    private shutdownCallback: intf.SimpleCallback;
+    private shutdownCallback: () => void;
     private loopTimeout: number;
 
     /** Simple constructor */
@@ -43,41 +43,36 @@ export class TopologyLeader {
             (err) => {
                 console.log("Leader shutdown finished.");
                 if (self.shutdownCallback) {
-                    self.shutdownCallback(err);
+                    self.shutdownCallback();
                 }
             }
         );
     }
 
     /** Shut down the loop */
-    shutdown(callback: intf.SimpleCallback) {
+    shutdown(): Promise<void> {
         let self = this;
-        self.shutdownCallback = callback;
-        self.isRunning = false;
+        return new Promise<void>((resolve, reject) => {
+            self.shutdownCallback = resolve;
+            self.isRunning = false;
+        });
     }
 
     /** Single step in checking if current node should be
      * promoted into leadership role.
      **/
-    private checkIfLeader(callback: intf.SimpleCallback) {
+    private async  checkIfLeader(callback: intf.SimpleCallback): Promise<void> {
         let self = this;
-        self.storage.getLeadershipStatus((err, res) => {
-            if (err) return callback(err);
-            if (res.leadership == "ok") return callback();
-            if (res.leadership == "pending") return callback();
-            // status is vacant
-            self.storage.announceLeaderCandidacy(self.name, (err) => {
-                if (err) return callback(err);
-                self.storage.checkLeaderCandidacy(self.name, (err, is_leader) => {
-                    if (err) return callback(err);
-                    self.isLeader = is_leader;
-                    if (self.isLeader) {
-                        console.log("This worker became a leader...");
-                    }
-                    callback();
-                });
-            });
-        });
+        let res = await self.storage.getLeadershipStatus();
+        if (res.leadership == "ok") return;
+        if (res.leadership == "pending") return;
+        // status is vacant
+        await self.storage.announceLeaderCandidacy(self.name);
+        let is_leader = await self.storage.checkLeaderCandidacy(self.name);
+        self.isLeader = is_leader;
+        if (self.isLeader) {
+            console.log("This worker became a leader...");
+        }
     }
 
     /** Single step in performing leadership role.

@@ -1,4 +1,12 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const async = require("async");
 const path = require("path");
@@ -56,42 +64,40 @@ class TopologyLocal {
     /** Initialization that sets up internal structure and
      * starts underlaying processes.
      */
-    init(config, callback) {
-        let self = this;
-        self.config = config;
-        self.heartbeatTimeout = config.general.heartbeat;
-        self.isInitialized = true;
-        self.initContext((err, context) => {
+    init(config) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let self = this;
+            self.config = config;
+            self.heartbeatTimeout = config.general.heartbeat;
+            self.isInitialized = true;
+            let context = yield self.initContext();
             let tasks = [];
-            self.config.bolts.forEach((bolt_config) => {
+            for (let bolt_config of self.config.bolts) {
                 if (bolt_config.disabled) {
-                    return;
+                    continue;
                 }
                 bolt_config.onEmit = (data, stream_id, callback) => {
                     self.redirect(bolt_config.name, data, stream_id, callback);
                 };
-                let bolt = null;
-                bolt = new top_inproc.TopologyBoltInproc(bolt_config, context);
+                let bolt = new top_inproc.TopologyBoltInproc(bolt_config, context);
                 self.bolts.push(bolt);
-                tasks.push((xcallback) => { bolt.init(xcallback); });
+                yield bolt.init();
                 for (let input of bolt_config.inputs) {
                     self.router.register(input.source, bolt_config.name, input.stream_id);
                 }
-            });
-            self.config.spouts.forEach((spout_config) => {
+            }
+            for (let spout_config of self.config.spouts) {
                 if (spout_config.disabled) {
-                    return;
+                    continue;
                 }
                 spout_config.onEmit = (data, stream_id, callback) => {
                     self.redirect(spout_config.name, data, stream_id, callback);
                 };
-                let spout = null;
-                spout = new top_inproc.TopologySpoutInproc(spout_config, context);
+                let spout = new top_inproc.TopologySpoutInproc(spout_config, context);
                 self.spouts.push(spout);
-                tasks.push((xcallback) => { spout.init(xcallback); });
-            });
+                yield spout.init();
+            }
             self.runHeartbeat();
-            async.series(tasks, callback);
         });
     }
     /** Sends run signal to all spouts */
@@ -106,39 +112,37 @@ class TopologyLocal {
         this.isRunning = true;
     }
     /** Sends pause signal to all spouts */
-    pause(callback) {
-        if (!this.isInitialized) {
-            throw new Error("Topology not initialized and cannot be paused.");
-        }
-        for (let spout of this.spouts) {
-            spout.pause();
-        }
-        this.isRunning = false;
-        callback();
+    pause() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this.isInitialized) {
+                throw new Error("Topology not initialized and cannot be paused.");
+            }
+            for (let spout of this.spouts) {
+                spout.pause();
+            }
+            this.isRunning = false;
+        });
     }
     /** Sends shutdown signal to all child processes */
-    shutdown(callback) {
-        if (!this.isInitialized) {
-            return callback();
-        }
-        let self = this;
-        self.isShuttingDown = true;
-        if (self.heartbeatTimer) {
-            clearInterval(self.heartbeatTimer);
-            self.heartbeatCallback();
-        }
-        self.pause((err) => {
+    shutdown() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this.isInitialized) {
+                return;
+            }
+            let self = this;
+            self.isShuttingDown = true;
+            if (self.heartbeatTimer) {
+                clearInterval(self.heartbeatTimer);
+                self.heartbeatCallback();
+            }
+            yield self.pause();
             let tasks = [];
-            self.spouts.forEach((spout) => {
-                tasks.push((xcallback) => {
-                    spout.shutdown(xcallback);
-                });
-            });
-            self.bolts.forEach((bolt) => {
-                tasks.push((xcallback) => {
-                    bolt.shutdown(xcallback);
-                });
-            });
+            for (let spout of self.spouts) {
+                yield spout.shutdown();
+            }
+            for (let bolt of self.bolts) {
+                yield bolt.shutdown();
+            }
             if (self.config.general.shutdown) {
                 let factory = (module_path) => {
                     return (xcallback) => {
@@ -148,10 +152,9 @@ class TopologyLocal {
                 for (let shutdown_conf of self.config.general.shutdown) {
                     let dir = path.resolve(shutdown_conf.working_dir); // path may be relative to current working dir
                     let module_path = path.join(dir, shutdown_conf.cmd);
-                    tasks.push(factory(module_path));
+                    yield require(module_path).shutdown();
                 }
             }
-            async.series(tasks, callback);
         });
     }
     /** Runs heartbeat pump until this object shuts down */
@@ -212,21 +215,23 @@ class TopologyLocal {
      * and returns the context object.
      * @param {Function} callback - standard callback
      */
-    initContext(callback) {
-        let self = this;
-        if (self.config.general.initialization) {
-            let common_context = {};
-            async.eachSeries(self.config.general.initialization, (init_conf, xcallback) => {
-                let dir = path.resolve(init_conf.working_dir); // path may be relative to current working dir
-                let module_path = path.join(dir, init_conf.cmd);
-                require(module_path).init(init_conf.init, common_context, xcallback);
-            }, (err) => {
-                callback(null, common_context);
-            });
-        }
-        else {
-            callback(null, null);
-        }
+    initContext() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let self = this;
+            if (self.config.general.initialization) {
+                let common_context = {};
+                for (let init_conf of self.config.general.initialization) {
+                    let dir = path.resolve(init_conf.working_dir); // path may be relative to current working dir
+                    let module_path = path.join(dir, init_conf.cmd);
+                    yield require(module_path).init(init_conf.init, common_context);
+                }
+                ;
+                return common_context;
+            }
+            else {
+                return null;
+            }
+        });
     }
 }
 exports.TopologyLocal = TopologyLocal;
