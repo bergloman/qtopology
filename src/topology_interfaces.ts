@@ -15,7 +15,7 @@ export interface BoltEmitResult {
     stream_id: string;
 }
 export interface BoltEmitCallback {
-    (data: any, stream_id: string): Promise<void>;
+    (data: any, stream_id: string): Promise<Error>;
 }
 export interface SpoutAckCallback {
     (error: Error): Promise<void>;

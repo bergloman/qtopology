@@ -293,12 +293,12 @@ export class TopologyBoltInproc {
     }
 
     /** Initializes child object. */
-    init(callback: intf.SimpleCallback) {
-        this.child.init(this.name, this.init_params, callback);
+    async init() : Promise<void>{
+        await this.child.init(this.name, this.init_params);
     }
 
     /** Sends data to child object. */
-    receive(data: any, stream_id: string, callback: intf.SimpleCallback) {
+    async receive(data: any, stream_id: string): Promise<void> {
         let self = this;
         let ts_start = Date.now();
         if (self.inSend > 0 && !self.allow_parallel) {
@@ -312,7 +312,7 @@ export class TopologyBoltInproc {
             });
         } else {
             self.inSend++;
-            self.child.receive(data, stream_id, (err) => {
+            await self.child.receive(data, stream_id);
                 callback(err);
                 self.inSend--;
                 if (self.inSend === 0) {
@@ -325,7 +325,6 @@ export class TopologyBoltInproc {
                         self.pendingShutdownCallback = null;
                     }
                 }
-            });
         }
     }
 
