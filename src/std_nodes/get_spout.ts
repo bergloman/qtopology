@@ -28,13 +28,12 @@ export class GetSpout implements intf.Spout {
         this.next_ts = Date.now();
     }
 
-    init(name: string, config: any, callback: intf.SimpleCallback) {
+    async     init(name: string, config: any): Promise<void> {
         this.name = name;
         this.url = config.url;
         this.repeat = config.repeat;
         this.stream_id = config.stream_id;
         this.client = new rest.Client();
-        callback();
     }
 
     heartbeat() {
@@ -50,8 +49,7 @@ export class GetSpout implements intf.Spout {
         }
     }
 
-    shutdown(callback: intf.SimpleCallback) {
-        callback();
+    async shutdown(): Promise<void> {
     }
 
     run() {
@@ -62,9 +60,13 @@ export class GetSpout implements intf.Spout {
         this.should_run = false;
     }
 
-    next(callback: intf.SpoutNextCallback) {
+    async next(): Promise<intf.SpoutNextResult> {
         let data = this.next_tuple;
         this.next_tuple = null;
-        callback(null, data, this.stream_id);
+        return {
+            err: null,
+            data: data,
+            stream_id: this.stream_id
+        };
     }
 }

@@ -18,7 +18,7 @@ export class RouterBolt implements intf.Bolt {
     }
 
     /** Initializes routing patterns */
-    init(name: string, config: any, callback: intf.SimpleCallback) {
+    async init(name: string, config: any): Promise<void> {
         this.name = name;
         this.onEmit = config.onEmit;
         for (let stream_id in config.routes) {
@@ -30,26 +30,19 @@ export class RouterBolt implements intf.Bolt {
                 });
             }
         }
-        callback();
     }
 
     heartbeat() { }
 
-    shutdown(callback: intf.SimpleCallback) {
-        callback();
+    async shutdown() {
     }
 
-    receive(data: any, stream_id: string, callback: intf.SimpleCallback) {
+    async receive(data: any, stream_id: string): Promise<void> {
         let self = this;
-        let tasks = [];
         for (let item of self.matchers) {
             if (item.matcher.isMatch(data)) {
-                /* jshint loopfunc:true */
-                tasks.push((xcallback) => {
-                    self.onEmit(data, item.stream_id, xcallback);
-                });
+                await self.onEmit(data, item.stream_id);
             }
         }
-        async.parallel(tasks, callback);
     }
 }

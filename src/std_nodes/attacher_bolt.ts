@@ -14,25 +14,23 @@ export class AttacherBolt implements intf.Bolt {
         this.extra_fields = null;
     }
 
-    init(name: string, config: any, callback: intf.SimpleCallback) {
+    async init(name: string, config: any): Promise<void> {
         this.name = name;
         this.onEmit = config.onEmit;
         this.extra_fields = JSON.parse(JSON.stringify(config.extra_fields || {}));
-        callback();
     }
 
     heartbeat() { }
 
-    shutdown(callback: intf.SimpleCallback) {
-        callback();
+    async shutdown(): Promise<void> {
     }
 
-    receive(data: any, stream_id: string, callback: intf.SimpleCallback) {
+    async receive(data: any, stream_id: string): Promise<void> {
         for (let f in this.extra_fields) {
             if (this.extra_fields.hasOwnProperty(f)) {
                 data[f] = this.extra_fields[f];
             }
         }
-        this.onEmit(data, stream_id, callback);
+        await this.onEmit(data, stream_id);
     }
 }

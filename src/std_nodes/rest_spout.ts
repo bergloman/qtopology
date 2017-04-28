@@ -23,7 +23,7 @@ export class RestSpout implements intf.Spout {
         this.server = null;
     }
 
-    init(name: string, config: any, callback: intf.SimpleCallback) {
+    async init(name: string, config: any): Promise<void> {
         this.name = name;
         this.port = config.port;
         this.stream_id = config.stream_id;
@@ -46,13 +46,19 @@ export class RestSpout implements intf.Spout {
         self.server.on('clientError', (err, socket) => {
             socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
         });
-        self.server.listen(self.port, callback);
+        self.server.listen(self.port);
     }
 
     heartbeat() { }
 
-    shutdown(callback: intf.SimpleCallback) {
-        this.server.close(callback);
+    shutdown(): Promise<void> {
+        let self = this;
+        return new Promise<void>((resolve, reject) => {
+            self.server.close((err) => {
+                if (err) return reject(err);
+                resolve();
+            });
+        });
     }
 
     run() {
@@ -63,12 +69,12 @@ export class RestSpout implements intf.Spout {
         this.should_run = false;
     }
 
-    next(callback: intf.SpoutNextCallback) {
+    async next(): Promise<intf.SpoutNextResult> {
         if (this.queue.length === 0) {
-            return callback(null, null, null);
+            return { err: null, data: null, stream_id: null };
         }
         let data = this.queue[0];
         this.queue = this.queue.slice(1);
-        callback(null, data, this.stream_id);
+        return { err: null, data: data, stream_id: this.stream_id };
     }
 }

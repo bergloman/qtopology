@@ -1,5 +1,5 @@
 import * as intf from "../topology_interfaces";
-import * as pm  from "../util/pattern_matcher";
+import * as pm from "../util/pattern_matcher";
 
 /////////////////////////////////////////////////////////////////////////////
 
@@ -18,24 +18,21 @@ export class FilterBolt implements intf.Bolt {
     }
 
     /** Initializes filtering pattern */
-    init(name: string, config: any, callback: intf.SimpleCallback) {
+    async     init(name: string, config: any) {
         this.name = name;
         this.onEmit = config.onEmit;
         this.matcher = new pm.PaternMatcher(config.filter);
-        callback();
     }
 
     heartbeat() { }
 
-    shutdown(callback: intf.SimpleCallback) {
-        callback();
+    async     shutdown(): Promise<void> {
     }
 
-    receive(data: any, stream_id: string, callback: intf.SimpleCallback) {
+    async     receive(data: any, stream_id: string): Promise<void> {
         if (this.matcher.isMatch(data)) {
-            this.onEmit(data, stream_id, callback);
+            await this.onEmit(data, stream_id);
         } else {
-            callback();
         }
     }
 }

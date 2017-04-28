@@ -4,7 +4,7 @@ import * as rest from 'node-rest-client';
 
 /** This bolt sends POST request to specified url (fixed or provided inside data)
  * and forwards the request. */
-export class PostBolt implements intf.Bolt  {
+export class PostBolt implements intf.Bolt {
 
     private name: string;
     private fixed_url: string;
@@ -17,21 +17,19 @@ export class PostBolt implements intf.Bolt  {
         this.fixed_url = null;
     }
 
-    init(name: string, config: any, callback: intf.SimpleCallback) {
+    async init(name: string, config: any): Promise<void> {
         this.name = name;
         this.onEmit = config.onEmit;
         this.fixed_url = config.url;
         this.client = new rest.Client();
-        callback();
     }
 
     heartbeat() { }
 
-    shutdown(callback: intf.SimpleCallback) {
-        callback();
+    async shutdown(): Promise<void> {
     }
 
-    receive(data: any, stream_id: string, callback: intf.SimpleCallback) {
+    async receive(data: any, stream_id: string): Promise<void> {
         let self = this;
         let url = this.fixed_url;
         let args = {
@@ -42,11 +40,11 @@ export class PostBolt implements intf.Bolt  {
             url = data.url;
             args.data = data.body;
         }
-        let req = self.client.post(url, args, (new_data, response) => {
-            self.onEmit({ body: new_data }, null, callback);
+        let req = self.client.post(url, args, async (new_data, response) => {
+            await self.onEmit({ body: new_data }, null);
         });
-        req.on('error', function (err) {
-            callback(err);
+        req.on('error', async (err) => {
+            return err;
         });
     }
 }

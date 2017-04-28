@@ -18,39 +18,37 @@ export class GetBolt implements intf.Bolt {
         this.fixed_url = null;
     }
 
-    init(name: string, config: any, callback: intf.SimpleCallback) {
+    async     init(name: string, config: any): Promise<void> {
         this.name = name;
         this.onEmit = config.onEmit;
         this.fixed_url = config.url;
         this.client = new rest.Client();
-        callback();
     }
 
     heartbeat() { }
 
-    shutdown(callback: intf.SimpleCallback) {
-        callback();
+    async shutdown(): Promise<void> {
     }
 
-    receive(data: any, stream_id: string, callback: intf.SimpleCallback) {
+    async     receive(data: any, stream_id: string): Promise<void> {
         let self = this;
         if (self.fixed_url) {
             let req = self.client.get(
                 self.fixed_url,
-                (new_data, response) => {
-                    self.onEmit({ body: new_data }, null, callback);
+                async (new_data, response) => {
+                    await self.onEmit({ body: new_data }, null);
                 });
-            req.on('error', function (err) {
-                callback(err);
+            req.on('error', async (err) => {
+                return err;
             });
         } else {
             let req = self.client.get(
                 data.url,
-                (new_data, response) => {
-                    self.onEmit({ body: new_data }, null, callback);
+                async (new_data, response) => {
+                    await self.onEmit({ body: new_data }, null);
                 });
-            req.on('error', function (err) {
-                callback(err);
+            req.on('error', async (err) => {
+                return err;
             });
         }
     }

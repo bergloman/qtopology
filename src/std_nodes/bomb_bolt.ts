@@ -17,12 +17,11 @@ export class BombBolt implements intf.Bolt {
         this.started_at = null;
     }
 
-    init(name: string, config: any, callback: intf.SimpleCallback) {
+    async init(name: string, config: any): Promise<void> {
         this.name = name;
         this.onEmit = config.onEmit;
         this.explode_after = config.explode_after || 10 * 1000;
         this.started_at = Date.now();
-        callback();
     }
 
     heartbeat() {
@@ -32,11 +31,10 @@ export class BombBolt implements intf.Bolt {
         }
     }
 
-    shutdown(callback: intf.SimpleCallback) {
-        callback();
+    async shutdown(): Promise<void> {
     }
 
-    receive(data: any, stream_id: string, callback: intf.SimpleCallback) {
-        this.onEmit(data, stream_id, callback);
+    async receive(data: any, stream_id: string): Promise<void> {
+        await this.onEmit(data, stream_id);
     }
 }

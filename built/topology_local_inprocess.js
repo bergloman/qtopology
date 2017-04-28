@@ -1,6 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const async = require("async");
 const path = require("path");
 const fb = require("./std_nodes/filter_bolt");
 const pb = require("./std_nodes/post_bolt");
@@ -49,9 +56,9 @@ class TopologySpoutInproc {
             this.isExit = true;
             this.isError = true;
         }
-        self.emitCallback = (data, stream_id, callback) => {
-            config.onEmit(data, stream_id, callback);
-        };
+        self.emitCallback = (data, stream_id) => __awaiter(this, void 0, void 0, function* () {
+            return yield config.onEmit(data, stream_id);
+        });
         self.isPaused = true;
         self.nextTs = Date.now();
     }
@@ -65,74 +72,77 @@ class TopologySpoutInproc {
     }
     /** Handler for heartbeat signal */
     heartbeat() {
-        let self = this;
-        self.child.heartbeat();
-        // emit telemetry
-        self.emitCallback(self.telemetry.get(), "$telemetry", () => { });
-        self.telemetry.reset();
-        self.emitCallback(self.telemetry_total.get(), "$telemetry-total", () => { });
+        return __awaiter(this, void 0, void 0, function* () {
+            let self = this;
+            self.child.heartbeat();
+            // emit telemetry
+            yield self.emitCallback(self.telemetry.get(), "$telemetry");
+            self.telemetry.reset();
+            yield self.emitCallback(self.telemetry_total.get(), "$telemetry-total");
+        });
     }
     /** Shuts down the process */
-    shutdown(callback) {
-        this.child.shutdown(callback);
+    shutdown() {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.child.shutdown();
+        });
     }
     /** Initializes child object. */
-    init(callback) {
-        this.child.init(this.name, this.init_params, callback);
+    init() {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.child.init(this.name, this.init_params);
+        });
+    }
+    delay(t) {
+        return new Promise((resolve) => {
+            setTimeout(resolve, t);
+        });
     }
     /** Sends run signal and starts the "pump"" */
     run() {
-        let self = this;
-        this.isPaused = false;
-        this.child.run();
-        async.whilst(() => { return !self.isPaused; }, (xcallback) => {
-            if (Date.now() < this.nextTs) {
-                let sleep = this.nextTs - Date.now();
-                setTimeout(() => { xcallback(); }, sleep);
-            }
-            else {
-                self.next(xcallback);
-            }
-        }, (err) => {
-            if (err) {
-                console.log(err);
+        return __awaiter(this, void 0, void 0, function* () {
+            let self = this;
+            this.isPaused = false;
+            this.child.run();
+            while (!self.isPaused) {
+                if (Date.now() < this.nextTs) {
+                    let sleep = this.nextTs - Date.now();
+                    yield self.delay(sleep);
+                }
+                else {
+                    yield self.next();
+                }
             }
         });
     }
     /** Requests next data message */
-    next(callback) {
-        let self = this;
-        if (this.isPaused) {
-            callback();
-        }
-        else {
-            let ts_start = Date.now();
-            setImmediate(() => {
-                this.child.next((err, data, stream_id, xcallback) => {
-                    self.telemetryAdd(Date.now() - ts_start);
-                    if (err) {
-                        console.error(err);
-                        callback();
-                        return;
+    next() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let self = this;
+            if (this.isPaused) {
+                return;
+            }
+            else {
+                let ts_start = Date.now();
+                yield self.delay(0);
+                let { err, data, stream_id, callback } = yield self.child.next();
+                self.telemetryAdd(Date.now() - ts_start);
+                if (err) {
+                    console.error(err);
+                    return;
+                }
+                if (!data) {
+                    self.nextTs = Date.now() + 1 * 1000; // sleep for 1 sec if spout is empty
+                }
+                else {
+                    let err = yield self.emitCallback(data, stream_id);
+                    // in case child object expects confirmation call for this tuple
+                    if (callback) {
+                        yield callback(err);
                     }
-                    if (!data) {
-                        self.nextTs = Date.now() + 1 * 1000; // sleep for 1 sec if spout is empty
-                        callback();
-                    }
-                    else {
-                        self.emitCallback(data, stream_id, (err) => {
-                            // in case child object expects confirmation call for this tuple
-                            if (xcallback) {
-                                xcallback(err, callback);
-                            }
-                            else {
-                                callback();
-                            }
-                        });
-                    }
-                });
-            });
-        }
+                }
+            }
+        });
     }
     /** Sends pause signal to child */
     pause() {
@@ -214,44 +224,51 @@ class TopologyBoltInproc {
     }
     /** Handler for heartbeat signal */
     heartbeat() {
-        let self = this;
-        self.child.heartbeat();
-        // emit telemetry
-        self.emitCallback(self.telemetry.get(), "$telemetry", () => { });
-        self.telemetry.reset();
-        self.emitCallback(self.telemetry_total.get(), "$telemetry-total", () => { });
+        return __awaiter(this, void 0, void 0, function* () {
+            let self = this;
+            self.child.heartbeat();
+            // emit telemetry
+            yield self.emitCallback(self.telemetry.get(), "$telemetry");
+            self.telemetry.reset();
+            yield self.emitCallback(self.telemetry_total.get(), "$telemetry-total");
+        });
     }
     /** Shuts down the child */
-    shutdown(callback) {
-        this.isShuttingDown = true;
-        if (this.inSend === 0) {
-            return this.child.shutdown(callback);
-        }
-        else {
-            this.pendingShutdownCallback = callback;
-        }
+    shutdown() {
+        return __awaiter(this, void 0, void 0, function* () {
+            this.isShuttingDown = true;
+            if (this.inSend === 0) {
+                yield this.child.shutdown();
+            }
+            else {
+                this.pendingShutdownCallback = callback;
+            }
+        });
     }
     /** Initializes child object. */
-    init(callback) {
-        this.child.init(this.name, this.init_params, callback);
+    init() {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.child.init(this.name, this.init_params);
+        });
     }
     /** Sends data to child object. */
-    receive(data, stream_id, callback) {
-        let self = this;
-        let ts_start = Date.now();
-        if (self.inSend > 0 && !self.allow_parallel) {
-            self.pendingSendRequests.push({
-                data: data,
-                stream_id: stream_id,
-                callback: (err) => {
-                    self.telemetryAdd(Date.now() - ts_start);
-                    callback(err);
-                }
-            });
-        }
-        else {
-            self.inSend++;
-            self.child.receive(data, stream_id, (err) => {
+    receive(data, stream_id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let self = this;
+            let ts_start = Date.now();
+            if (self.inSend > 0 && !self.allow_parallel) {
+                self.pendingSendRequests.push({
+                    data: data,
+                    stream_id: stream_id,
+                    callback: (err) => {
+                        self.telemetryAdd(Date.now() - ts_start);
+                        callback(err);
+                    }
+                });
+            }
+            else {
+                self.inSend++;
+                yield self.child.receive(data, stream_id);
                 callback(err);
                 self.inSend--;
                 if (self.inSend === 0) {
@@ -265,8 +282,8 @@ class TopologyBoltInproc {
                         self.pendingShutdownCallback = null;
                     }
                 }
-            });
-        }
+            }
+        });
     }
     /** Factory method for sys bolts */
     createSysBolt(bolt_config, context) {
