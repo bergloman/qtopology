@@ -1,6 +1,7 @@
 
 import * as async from "async";
 import * as lb from "../util/load_balance";
+import * as utils from "../util/helpers";
 import * as intf from "../topology_interfaces";
 
 /** This class handles leader-status determination and
@@ -12,7 +13,7 @@ export class TopologyLeader {
     private name: string;
     private isRunning: boolean;
     private isLeader: boolean;
-    private shutdownCallback: intf.SimpleCallback;
+    private shutdownCallback: () => void;
     private loopTimeout: number;
 
     /** Simple constructor */
@@ -26,146 +27,104 @@ export class TopologyLeader {
     }
 
     /** Runs main loop that handles leadership detection */
-    run() {
+    async run() {
         let self = this;
         self.isRunning = true;
-        async.whilst(
-            () => { return self.isRunning; },
-            (xcallback) => {
-                setTimeout(function () {
-                    if (self.isLeader) {
-                        self.performLeaderLoop(xcallback);
-                    } else {
-                        self.checkIfLeader(xcallback);
-                    }
-                }, self.loopTimeout);
-            },
-            (err) => {
-                console.log("[Leader] Leader shutdown finished.");
-                if (self.shutdownCallback) {
-                    self.shutdownCallback(err);
-                }
+        while (self.isRunning) {
+            if (self.isLeader) {
+                self.performLeaderLoop();
+            } else {
+                self.checkIfLeader();
             }
-        );
+            await utils.delay(self.loopTimeout);
+        }
+        if (self.shutdownCallback) {
+            self.shutdownCallback();
+        }
     }
 
     /** Shut down the loop */
-    shutdown(callback: intf.SimpleCallback) {
+    shutdown(): Promise<void> {
         let self = this;
-        self.shutdownCallback = callback;
-        self.isRunning = false;
+        return new Promise<void>((resolve, reject) => {
+            self.shutdownCallback = resolve;
+            self.isRunning = false;
+        });
     }
 
     /** Single step in checking if current node should be
      * promoted into leadership role.
      **/
-    private checkIfLeader(callback: intf.SimpleCallback) {
+    private async  checkIfLeader(): Promise<void> {
         let self = this;
-        self.storage.getLeadershipStatus((err, res) => {
-            if (err) return callback(err);
-            if (res.leadership == "ok") return callback();
-            if (res.leadership == "pending") return callback();
-            // status is vacant
-            self.storage.announceLeaderCandidacy(self.name, (err) => {
-                if (err) return callback(err);
-                self.storage.checkLeaderCandidacy(self.name, (err, is_leader) => {
-                    if (err) return callback(err);
-                    self.isLeader = is_leader;
-                    if (self.isLeader) {
-                        console.log("[Leader] This worker became a leader...");
-                    }
-                    callback();
-                });
-            });
-        });
+        let res = await self.storage.getLeadershipStatus();
+        if (res.leadership == "ok") return;
+        if (res.leadership == "pending") return;
+        // status is vacant
+        await self.storage.announceLeaderCandidacy(self.name);
+        let is_leader = await self.storage.checkLeaderCandidacy(self.name);
+        self.isLeader = is_leader;
+        if (self.isLeader) {
+            console.log("[Leader] This worker became a leader...");
+        }
     }
 
     /** Single step in performing leadership role.
-     * Checks work statuses and redistributes topologies for dead
+     * Checks work statuses and redistributes topologies from dead
      * to alive workers.
      */
-    private performLeaderLoop(callback: intf.SimpleCallback) {
+    private async performLeaderLoop(): Promise<void> {
         let self = this;
         let alive_workers = null;
-        async.series(
-            [
-                (xcallback) => {
-                    self.storage.getWorkerStatus((err, workers) => {
-                        if (err) return xcallback(err);
-                        // each worker: name, status, topology_count
-                        // possible statuses: alive, dead, unloaded
-                        let dead_workers = workers
-                            .filter(x => x.status === "dead")
-                            .map(x => x.name);
-                        alive_workers = workers
-                            .filter(x => x.status === "alive");
-                        if (alive_workers.length == 0) {
-                            return xcallback();
-                        }
-                        async.each(
-                            dead_workers,
-                            (dead_worker, xxcallback) => {
-                                self.handleDeadWorker(dead_worker, xxcallback);
-                            },
-                            xcallback
-                        );
-                    });
-                },
-                (xcallback) => {
-                    if (alive_workers.length == 0) {
-                        return xcallback();
-                    }
-                    self.storage.getTopologyStatus((err, topologies) => {
-                        if (err) return xcallback(err);
-                        // each topology: name, status
-                        // possible statuses: unassigned, waiting, running, error, stopped
-                        let unassigned_topologies = topologies
-                            .filter(x => x.status === "unassigned" || x.status === "stopped")
-                            .map(x => x.uuid);
-                        if (unassigned_topologies.length > 0) {
-                            console.log("[Leader] Found unassigned topologies:", unassigned_topologies)
-                        }
-                        let load_balancer = new lb.LoadBalancer(
-                            alive_workers.map(x => { return { name: x.name, weight: x.topology_count }; })
-                        );
-                        async.each(
-                            unassigned_topologies,
-                            (unassigned_topology, xxcallback) => {
-                                let target = load_balancer.next();
-                                console.log(`[Leader] Assigning topology ${unassigned_topology} to worker ${target}`);
-                                self.storage.assignTopology(unassigned_topology, target, xxcallback);
-                            },
-                            xcallback
-                        );
-                    });
-                }
-            ],
-            callback
+
+        let workers = await self.storage.getWorkerStatus();
+        // each worker: name, status, topology_count
+        // possible statuses: alive, dead, unloaded
+        let dead_workers = workers
+            .filter(x => x.status === "dead")
+            .map(x => x.name);
+        alive_workers = workers
+            .filter(x => x.status === "alive");
+        if (alive_workers.length >= 0) {
+            for (let dead_worker of dead_workers) {
+                await self.handleDeadWorker(dead_worker);
+            }
+        }
+        if (alive_workers.length == 0) {
+            return;
+        }
+        let topologies = await self.storage.getTopologyStatus();
+        // each topology: name, status
+        // possible statuses: unassigned, waiting, running, error, stopped
+        let unassigned_topologies = topologies
+            .filter(x => x.status === "unassigned" || x.status === "stopped")
+            .map(x => x.uuid);
+        if (unassigned_topologies.length > 0) {
+            console.log("[Leader] Found unassigned topologies:", unassigned_topologies)
+        }
+        let load_balancer = new lb.LoadBalancer(
+            alive_workers.map(x => { return { name: x.name, weight: x.topology_count }; })
         );
+        for (let unassigned_topology of unassigned_topologies) {
+            let target = load_balancer.next();
+            console.log(`[Leader] Assigning topology ${unassigned_topology} to worker ${target}`);
+            await self.storage.assignTopology(unassigned_topology, target);
+        }
     }
 
     /** Handles situation when there is a dead worker and its
      * topologies need to be re-assigned to other servers.
      */
-    private handleDeadWorker(dead_worker: string, callback: intf.SimpleCallback) {
+    private async handleDeadWorker(dead_worker: string): Promise<void> {
         console.log("[Leader] Handling dead worker", dead_worker);
         let self = this;
-        self.storage.getTopologiesForWorker(dead_worker, (err, topologies) => {
-            async.each(
-                topologies,
-                (topology, xcallback) => {
-                    console.log("[Leader] Unassigning topology", topology.uuid);
-                    self.storage.setTopologyStatus(topology.uuid, "unassigned", null, xcallback);
-                },
-                (err) => {
-                    if (err) {
-                        console.log("[Leader] Error while handling dead worker", err);
-                        return callback(err);
-                    }
-                    console.log("[Leader] Setting dead worker as unloaded", dead_worker);
-                    self.storage.setWorkerStatus(dead_worker, "unloaded", callback);
-                }
-            );
-        });
+        let topologies = await self.storage.getTopologiesForWorker(dead_worker);
+        for (let topology of topologies) {
+            console.log("[Leader] Unassigning topology", topology.uuid);
+            await self.storage.setTopologyStatus(topology.uuid, "unassigned", null);
+        };
+        //console.log("[Leader] Error while handling dead worker", err);
+        console.log("[Leader] Setting dead worker as unloaded", dead_worker);
+        await self.storage.setWorkerStatus(dead_worker, "unloaded");
     }
 }

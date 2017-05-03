@@ -21,16 +21,14 @@ export class AttacherBolt implements intf.Bolt {
     }
 
     heartbeat() { }
+    async shutdown(): Promise<void> { }
 
-    async shutdown(): Promise<void> {
-    }
-
-    async receive(data: any, stream_id: string): Promise<void> {
+    async receive(data: any, stream_id: string): Promise<Error> {
         for (let f in this.extra_fields) {
             if (this.extra_fields.hasOwnProperty(f)) {
                 data[f] = this.extra_fields[f];
             }
         }
-        await this.onEmit(data, stream_id);
+        return await this.onEmit(data, stream_id);
     }
 }

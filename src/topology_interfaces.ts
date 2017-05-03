@@ -43,7 +43,7 @@ export interface Bolt {
     init(name: string, config: any): Promise<void>;
     heartbeat(): void;
     shutdown(): Promise<void>;
-    receive(data: any, stream_id: string): Promise<void>;
+    receive(data: any, stream_id: string): Promise<Error>;
 }
 
 export interface Spout {

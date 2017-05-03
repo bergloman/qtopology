@@ -25,8 +25,7 @@ class AttacherBolt {
     }
     heartbeat() { }
     shutdown() {
-        return __awaiter(this, void 0, void 0, function* () {
-        });
+        return __awaiter(this, void 0, void 0, function* () { });
     }
     receive(data, stream_id) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -35,7 +34,7 @@ class AttacherBolt {
                     data[f] = this.extra_fields[f];
                 }
             }
-            yield this.onEmit(data, stream_id);
+            return yield this.onEmit(data, stream_id);
         });
     }
 }

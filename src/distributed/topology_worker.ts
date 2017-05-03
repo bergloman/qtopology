@@ -27,13 +27,13 @@ export class TopologyWorker {
         this.topologies = [];
 
         let self = this;
-        self.coordinator.on("start", (msg) => {
+        self.coordinator.on("start", async (msg) => {
             console.log("[Worker] Received start instruction from coordinator");
-            self.start(msg.uuid, msg.config);
+            await self.start(msg.uuid, msg.config);
         });
-        self.coordinator.on("shutdown", (msg) => {
+        self.coordinator.on("shutdown", async (msg) => {
             console.log("[Worker] Received shutdown instruction from coordinator");
-            self.shutdown(() => { });
+            await self.shutdown();
         });
     }
 
@@ -43,14 +43,14 @@ export class TopologyWorker {
     }
 
     /** Starts single topology */
-    private start(uuid, config) {
+    private async start(uuid, config): Promise<void> {
         let compiler = new comp.TopologyCompiler(config);
         compiler.compile();
         config = compiler.getWholeConfig();
 
         let self = this;
         if (self.topologies.filter(x => x.uuid === uuid).length > 0) {
-            self.coordinator.reportTopology(uuid, "error", "Topology with this UUID already exists: " + uuid);
+            await self.coordinator.reportTopology(uuid, "error", "Topology with this UUID already exists: " + uuid);
             return;
         }
         let rec = new TopologyItem();
@@ -67,21 +67,21 @@ export class TopologyWorker {
             }
             self.removeTopology(uuid);
         });
-        rec.proxy.init(config, (err) => {
-            if (err) {
-                self.removeTopology(uuid);
-                self.coordinator.reportTopology(uuid, "error", "" + err);
-            } else {
-                rec.proxy.run((err) => {
-                    if (err) {
-                        self.removeTopology(uuid);
-                        self.coordinator.reportTopology(uuid, "error", "" + err);
-                    } else {
-                        self.coordinator.reportTopology(uuid, "running", "");
-                    }
-                });
-            }
-        });
+        try {
+            await rec.proxy.init(config);
+        } catch (err) {
+            self.removeTopology(uuid);
+            self.coordinator.reportTopology(uuid, "error", "" + err);
+            return;
+        }
+
+        try {
+            await rec.proxy.run();
+        } catch (err) {
+            self.removeTopology(uuid);
+            self.coordinator.reportTopology(uuid, "error", "" + err);
+        }
+        await self.coordinator.reportTopology(uuid, "running", "");
     }
 
     /** Remove specified topology from internal list */
@@ -90,26 +90,14 @@ export class TopologyWorker {
     }
 
     /** Shuts down the worker and all its subprocesses. */
-    shutdown(callback: intf.SimpleCallback) {
+    async shutdown(): Promise<void> {
         let self = this;
-        async.each(
-            self.topologies,
-            (itemx, xcallback) => {
-                let item = itemx as TopologyItem;
-                item.proxy.shutdown((err) => {
-                    if (err) {
-                        console.log("[Worker] Error while shutting down topology", item.uuid, err);
-                    } else {
-                        self.coordinator.reportTopology(item.uuid, "stopped", "", xcallback);
-                    }
-                });
-            },
-            (err) => {
-                if (err) {
-                    console.log("[Worker] Error while shutting down topologies:", err);
-                }
-                self.coordinator.shutdown(callback);
-            }
-        );
+        for (let item of self.topologies) {
+            await item.proxy.shutdown();
+            //    console.log("[Worker] Error while shutting down topology", item.uuid, err);
+            await self.coordinator.reportTopology(item.uuid, "stopped", "");
+        }
+        //console.log("[Worker] Error while shutting down topologies:", err);
+        await self.coordinator.shutdown();
     }
 }

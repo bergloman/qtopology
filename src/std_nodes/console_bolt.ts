@@ -20,12 +20,10 @@ export class ConsoleBolt implements intf.Bolt {
     }
 
     heartbeat() { }
+    async shutdown(): Promise<void> { }
 
-    async shutdown(): Promise<void> {
-    }
-
-    async receive(data: any, stream_id: string): Promise<void> {
+    async receive(data: any, stream_id: string): Promise<Error> {
         console.log(this.prefix, `[stream_id=${stream_id}]`, data);
-        await this.onEmit(data, stream_id);
+        return await this.onEmit(data, stream_id);
     }
 }

@@ -18,21 +18,19 @@ export class FilterBolt implements intf.Bolt {
     }
 
     /** Initializes filtering pattern */
-    async     init(name: string, config: any) {
+    async init(name: string, config: any): Promise<void> {
         this.name = name;
         this.onEmit = config.onEmit;
         this.matcher = new pm.PaternMatcher(config.filter);
     }
 
     heartbeat() { }
+    async shutdown(): Promise<void> { }
 
-    async     shutdown(): Promise<void> {
-    }
-
-    async     receive(data: any, stream_id: string): Promise<void> {
+    async receive(data: any, stream_id: string): Promise<Error> {
         if (this.matcher.isMatch(data)) {
-            await this.onEmit(data, stream_id);
-        } else {
+            return await this.onEmit(data, stream_id);
         }
+        return null;
     }
 }

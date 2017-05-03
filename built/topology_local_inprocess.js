@@ -20,6 +20,7 @@ const rs = require("./std_nodes/rest_spout");
 const ts = require("./std_nodes/timer_spout");
 const gs = require("./std_nodes/get_spout");
 const tss = require("./std_nodes/test_spout");
+const utils = require("./util/helpers");
 const tel = require("./util/telemetry");
 /** Wrapper for "spout" in-process */
 class TopologySpoutInproc {
@@ -93,11 +94,6 @@ class TopologySpoutInproc {
             yield this.child.init(this.name, this.init_params);
         });
     }
-    delay(t) {
-        return new Promise((resolve) => {
-            setTimeout(resolve, t);
-        });
-    }
     /** Sends run signal and starts the "pump"" */
     run() {
         return __awaiter(this, void 0, void 0, function* () {
@@ -107,7 +103,7 @@ class TopologySpoutInproc {
             while (!self.isPaused) {
                 if (Date.now() < this.nextTs) {
                     let sleep = this.nextTs - Date.now();
-                    yield self.delay(sleep);
+                    yield utils.delay(sleep);
                 }
                 else {
                     yield self.next();
@@ -124,7 +120,7 @@ class TopologySpoutInproc {
             }
             else {
                 let ts_start = Date.now();
-                yield self.delay(0);
+                yield utils.delay(0);
                 let { err, data, stream_id, callback } = yield self.child.next();
                 self.telemetryAdd(Date.now() - ts_start);
                 if (err) {

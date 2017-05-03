@@ -2,6 +2,7 @@
 import * as topology_compiler from "../topology_compiler";
 import * as tl from "../topology_local";
 import * as intf from "../topology_interfaces";
+import * as utils from "../util/helpers";
 
 /**
  * This class acts as wrapper for local topology when
@@ -24,26 +25,10 @@ class TopologyLocalWrapper {
     /** Starts infinite loop by reading messages from parent or console */
     start() {
         let self = this;
-        // process.stdin.addListener("data", function (d) {
-        //     try {
-        //         d = d.toString().trim();
-        //         let i = d.indexOf(" ");
-        //         if (i > 0) {
-        //             self._handle({
-        //                 cmd: d.substr(0, i),
-        //                 data: JSON.parse(d.substr(i))
-        //             });
-        //         } else {
-        //             self._handle({ cmd: d, data: {} });
-        //         }
-        //     } catch (e) {
-        //         console.error(e);
-        //     }
-        // });
     }
 
     /** Internal main handler for incoming messages */
-    private handle(msg: intf.ParentMsg) {
+    private async handle(msg: intf.ParentMsg) {
         let self = this;
         if (msg.cmd === intf.ParentMsgCode.init) {
             console.log("[Local wrapper] Initializing topology", msg.data.general.name);
@@ -51,28 +36,24 @@ class TopologyLocalWrapper {
             let compiler = new topology_compiler.TopologyCompiler(msg.data);
             compiler.compile();
             let topology = compiler.getWholeConfig();
-            self.topology_local.init(topology, (err) => {
-                self.topology_local.run();
-                self.send(intf.ChildMsgCode.response_init, { err: err });
-            });
+            await self.topology_local.init(topology);
+            self.topology_local.run();
+            self.send(intf.ChildMsgCode.response_init, { err: null });
         }
         if (msg.cmd === intf.ParentMsgCode.run) {
             self.topology_local.run();
             self.send(intf.ChildMsgCode.response_run, {});
         }
         if (msg.cmd === intf.ParentMsgCode.pause) {
-            self.topology_local.pause((err) => {
-                self.send(intf.ChildMsgCode.response_pause, { err: err });
-            });
+            await self.topology_local.pause();
+            self.send(intf.ChildMsgCode.response_pause, { err: null });
         }
         if (msg.cmd === intf.ParentMsgCode.shutdown) {
             console.log("[Local wrapper] Shutting down topology", self.name);
-            self.topology_local.shutdown((err) => {
-                self.send(intf.ChildMsgCode.response_shutdown, { err: err });
-                setTimeout(() => {
-                    process.exit(0);
-                }, 100);
-            });
+            await self.topology_local.shutdown();
+            self.send(intf.ChildMsgCode.response_shutdown, { err: null });
+            await utils.delay(100);
+            process.exit(0);
         }
     }
 
