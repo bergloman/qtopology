@@ -17,7 +17,7 @@ export interface IProcessingHandlerCallback {
     (err: Error, data?: any);
 }
 export interface IProcessingHandler {
-    (data: any, callback: IProcessingHandlerCallback);
+    (data: any): Promise<any>;
 }
 class RouteRec {
     public local_path: string;
@@ -66,7 +66,7 @@ export class MinimalHttpServer {
     }
 
     /** For handling requests that have been received by another HTTP server object. */
-    public handle(method: string, addr: string, body: any, resp: http.ServerResponse) {
+    public async handle(method: string, addr: string, body: any, resp: http.ServerResponse) {
         logger.logger().debug(this.log_prefix + `Handling ${method} ${addr}`);
         if (this.routes.has(addr)) {
             const rec = this.routes.get(addr);
@@ -88,12 +88,8 @@ export class MinimalHttpServer {
             }
             logger.logger().debug(this.log_prefix + "Handling " + body);
             try {
-                this.handlers.get(addr)(data, (err, data_inner) => {
-                    if (err) {
-                        return this.handleError(err, resp);
-                    }
-                    this.handleResponse(data_inner, resp);
-                });
+                const data_inner = await this.handlers.get(addr)(data);
+                this.handleResponse(data_inner, resp);
             } catch (e) {
                 this.handleError(e, resp);
                 return;
@@ -104,10 +100,9 @@ export class MinimalHttpServer {
     }
     /** For running the server */
     public run(port: number) {
-        const server = http.createServer(this.withBody((req, resp) => {
+        const server = http.createServer(this.withBody(async (req, resp) => {
 
             // get the HTTP method, path and body of the request
-            // let method = req.method;
             const addr = req.url;
 
             logger.logger().debug(this.log_prefix + `Handling ${req.method} ${addr}`);
@@ -127,12 +122,8 @@ export class MinimalHttpServer {
                 }
                 logger.logger().debug(this.log_prefix + "Handling " + req.body);
                 try {
-                    this.handlers.get(addr)(data, (err, data_inner) => {
-                        if (err) {
-                            return this.handleError(err, resp);
-                        }
-                        this.handleResponse(data_inner, resp);
-                    });
+                    const data_inner = await this.handlers.get(addr)(data);
+                    this.handleResponse(data_inner, resp);
                 } catch (e) {
                     this.handleError(e, resp);
                     return;

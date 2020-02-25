@@ -1,11 +1,16 @@
 /////////////////////////////////////////////////////////////////////////
 // Different callbacks
 
-export type SimpleCallback = (error?: Error) => void;
-export type SimpleResultCallback<T> = (error?: Error, data?: T) => void;
-export type InitContextCallback = (error?: Error, context?: any) => void;
-export type BoltEmitCallback = (data: any, stream_id: string, callback: SimpleCallback) => void;
-export type SpoutNextCallback = (err: Error, data: any, stream_id: string) => void;
+// export type SimpleCallback = (error?: Error) => void;
+// export type SimpleResultCallback<T> = (error?: Error, data?: T) => void;
+// export type InitContextCallback = (error?: Error, context?: any) => void;
+// export type BoltEmitCallback = (data: any, stream_id: string, callback: SimpleCallback) => void;
+
+export interface ISpoutResult {
+    data: any;
+    stream_id?: string;
+}
+// export type SpoutNextCallback = (err: Error, data: any, stream_id: string) => void;
 
 export type BoltEmitCallbackAsync = (data: any, stream_id: string) => Promise<void>;
 
@@ -67,19 +72,19 @@ export interface ITopologyDefinitionBoltInput {
 // Inetrface that need to be implemented by custom bolts and spouts
 
 export interface IBolt {
-    init(name: string, config: any, context: any, callback: SimpleCallback): void;
+    init(name: string, config: any, context: any): Promise<void>;
     heartbeat(): void;
-    shutdown(callback: SimpleCallback): void;
-    receive(data: any, stream_id: string, callback: SimpleCallback): void;
+    shutdown(): Promise<void>;
+    receive(data: any, stream_id: string): Promise<void>;
 }
 
 export interface ISpout {
-    init(name: string, config: any, context: any, callback: SimpleCallback): void;
+    init(name: string, config: any, context: any): Promise<void>;
     heartbeat(): void;
-    shutdown(callback: SimpleCallback): void;
+    shutdown(): Promise<void>;
     run(): void;
     pause(): void;
-    next(callback: SpoutNextCallback): void;
+    next(): Promise<ISpoutResult>;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -259,38 +264,38 @@ export interface IMsgQueueItem {
  */
 export interface ICoordinationStorage {
 
-    getWorkerStatus(callback: SimpleResultCallback<IWorkerStatus[]>): void;
-    getTopologyStatus(callback: SimpleResultCallback<ITopologyStatus[]>): void;
-    getTopologiesForWorker(worker: string, callback: SimpleResultCallback<ITopologyStatus[]>): void;
-    getMessages(name: string, callback: SimpleResultCallback<IStorageResultMessage[]>): void;
-    getMessage(name: string, callback: SimpleResultCallback<IStorageResultMessage>): void;
-    getTopologyInfo(uuid: string, callback: SimpleResultCallback<ITopologyInfoResponse>): void;
+    getWorkerStatus(): Promise<IWorkerStatus[]>;
+    getTopologyStatus(): Promise<ITopologyStatus[]>;
+    getTopologiesForWorker(worker: string): Promise<ITopologyStatus[]>;
+    getMessages(name: string): Promise<IStorageResultMessage[]>;
+    getMessage(name: string): Promise<IStorageResultMessage[]>;
+    getTopologyInfo(uuid: string): Promise<ITopologyInfoResponse>;
 
-    getTopologyHistory(uuid: string, callback: SimpleResultCallback<ITopologyStatusHistory[]>): void;
-    getWorkerHistory(name: string, callback: SimpleResultCallback<IWorkerStatusHistory[]>): void;
+    getTopologyHistory(uuid: string): Promise<ITopologyStatusHistory[]>;
+    getWorkerHistory(name: string): Promise<IWorkerStatusHistory[]>;
 
-    registerWorker(name: string, callback: SimpleCallback): void;
-    pingWorker(name: string, callback?: SimpleCallback): void;
-    announceLeaderCandidacy(name: string, callback: SimpleCallback): void;
-    checkLeaderCandidacy(name: string, callback: SimpleResultCallback<boolean>): void;
+    registerWorker(name: string): Promise<void>;
+    pingWorker(name: string): Promise<void>;
+    announceLeaderCandidacy(name: string): Promise<void>;
+    checkLeaderCandidacy(name: string): Promise<boolean>;
 
-    assignTopology(uuid: string, worker: string, callback: SimpleCallback): void;
-    setTopologyStatus(uuid: string, worker: string, status: string, error: string, callback: SimpleCallback): void;
-    setTopologyPid(uuid: string, pid: number, callback: SimpleCallback): void;
-    setWorkerStatus(worker: string, status: string, callback: SimpleCallback): void;
-    setWorkerLStatus(worker: string, lstatus: string, callback: SimpleCallback): void;
+    assignTopology(uuid: string, worker: string): Promise<void>;
+    setTopologyStatus(uuid: string, worker: string, status: string, error: string): Promise<void>;
+    setTopologyPid(uuid: string, pid: number): Promise<void>;
+    setWorkerStatus(worker: string, status: string): Promise<void>;
+    setWorkerLStatus(worker: string, lstatus: string): Promise<void>;
 
-    sendMessageToWorker(worker: string, cmd: string, content: any, valid_msec: number, callback: SimpleCallback): void;
-    getMsgQueueContent(callback: SimpleResultCallback<IMsgQueueItem[]>): void;
+    sendMessageToWorker(worker: string, cmd: string, content: any, valid_msec: number): Promise<void>;
+    getMsgQueueContent(): Promise<IMsgQueueItem[]>;
 
-    registerTopology(uuid: string, config: ITopologyDefinition, callback: SimpleCallback): void;
-    disableTopology(uuid: string, callback: SimpleCallback): void;
-    enableTopology(uuid: string, callback: SimpleCallback): void;
-    stopTopology(uuid: string, callback: SimpleCallback): void;
-    killTopology(uuid: string, callback: SimpleCallback): void;
-    deleteTopology(uuid: string, callback: SimpleCallback): void;
+    registerTopology(uuid: string, config: ITopologyDefinition): Promise<void>;
+    disableTopology(uuid: string): Promise<void>;
+    enableTopology(uuid: string): Promise<void>;
+    stopTopology(uuid: string): Promise<void>;
+    killTopology(uuid: string): Promise<void>;
+    deleteTopology(uuid: string): Promise<void>;
 
-    deleteWorker(name: string, callback: SimpleCallback): void;
+    deleteWorker(name: string): Promise<void>;
 
-    getProperties(callback: SimpleResultCallback<IStorageProperty[]>): void;
+    getProperties(): Promise<IStorageProperty[]>;
 }

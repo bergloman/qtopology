@@ -1,4 +1,3 @@
-
 export class CronTabParser {
 
     private parts: number[][];

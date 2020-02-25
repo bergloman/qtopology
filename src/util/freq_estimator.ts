@@ -1,6 +1,3 @@
-
-
-
 export class EventFrequencyScore {
 
     private c: number;
