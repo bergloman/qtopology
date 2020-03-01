@@ -4,7 +4,8 @@
 // export type SimpleCallback = (error?: Error) => void;
 // export type SimpleResultCallback<T> = (error?: Error, data?: T) => void;
 // export type InitContextCallback = (error?: Error, context?: any) => void;
-// export type BoltEmitCallback = (data: any, stream_id: string, callback: SimpleCallback) => void;
+export type BoltEmitCallback = (data: any, stream_id: string) => Promise<void>;
+export type BoltAsyncEmitCallback = (data: any, stream_id: string) => Promise<void>;
 
 export interface ISpoutResult {
     data: any;
@@ -89,8 +90,6 @@ export interface ISpout {
 
 ////////////////////////////////////////////////////////////////////////
 // Async classes
-
-export type BoltAsyncEmitCallback = (data: any, stream_id: string) => Promise<void>;
 
 export interface IBoltAsyncConfig {
     onEmit: BoltAsyncEmitCallback;

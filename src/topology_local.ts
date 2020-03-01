@@ -113,8 +113,8 @@ export class TopologyLocal {
                 log.logger().debug(this.logging_prefix + `Skipping disabled bolt - ${bolt_config.name}`);
                 return;
             }
-            bolt_config.onEmit = (data, stream_id, xcallback) => {
-                this.redirect(bolt_config.name, data, stream_id, xcallback);
+            bolt_config.onEmit = async (data, stream_id) => {
+                await this.redirect(bolt_config.name, data, stream_id);
             };
             const bolt = new top_inproc.TopologyBoltWrapper(bolt_config, context);
             this.bolts.push(bolt);
